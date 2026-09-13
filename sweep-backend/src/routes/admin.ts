@@ -28,6 +28,7 @@ import { requireAdmin } from "../lib/adminAuth.js";
 import { getAdminStats } from "../lib/adminStats.js";
 import { createPromoCode, deletePromoCode, listPromoCodes } from "../lib/promoAdmin.js";
 import { probe, probeAdapter, probeDirect, recentStress, stress } from "../lib/probe.js";
+import { getVisitSummary } from "../lib/siteVisits.js";
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/admin", async (_request, reply) => {
@@ -37,6 +38,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get("/admin/stats", { preHandler: requireAdmin }, async () => {
     return getAdminStats();
+  });
+
+  // Visits to the public site. Counts, not people — see lib/siteVisits.ts for
+  // what is deliberately not stored and why.
+  app.get("/admin/visits", { preHandler: requireAdmin }, async () => {
+    return getVisitSummary();
   });
 
   // Fetch a url from wherever this server is, and report what came back.
@@ -235,6 +242,18 @@ const PAGE = `<!doctype html>
   .bar i.bad { background: #dc2626; }
 
   /* Seven bars. Enough to see a direction, which is all a week can tell you. */
+  /* Two lists side by side on a desktop, stacked on a phone. */
+  .two { display: grid; gap: 18px; margin-top: 18px; }
+  @media (min-width: 620px) { .two { grid-template-columns: 1fr 1fr; } }
+  .two h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+            color: #9aa0aa; margin: 0 0 8px; }
+  /* dt/dd as a two-column row: name on the left, count right-aligned. */
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; margin: 0; }
+  dt { color: #d5d8dd; font-size: 14px; overflow: hidden; text-overflow: ellipsis;
+       white-space: nowrap; }
+  dd { margin: 0; color: #9aa0aa; font-size: 14px; text-align: right;
+       font-variant-numeric: tabular-nums; }
+  .muted { color: #7b818b; font-size: 13px; line-height: 1.5; margin-top: 14px; }
   .spark { display: flex; align-items: flex-end; gap: 6px; height: 96px; }
   .spark div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
                align-items: center; gap: 4px; height: 100%; }
@@ -266,6 +285,18 @@ const PAGE = `<!doctype html>
 
   <h2>Last 7 days</h2>
   <div class="spark" id="trend"></div>
+
+  <h2>Website visits</h2>
+  <div class="grid" id="visits"></div>
+  <div class="spark" id="visitTrend"></div>
+  <div class="two">
+    <div><h3>Pages</h3><dl id="visitPages"></dl></div>
+    <div><h3>Came from</h3><dl id="visitRefs"></dl></div>
+  </div>
+  <p class="muted">
+    Visits, not visitors. No IP, cookie or session is stored, so one person
+    opening the site ten times counts ten times. Obvious crawlers are excluded.
+  </p>
 
   <h2>People</h2>
   <div class="grid" id="people"></div>
@@ -506,6 +537,8 @@ async function load() {
       '<span class="lab">' + day + "</span></div>";
   }).join("");
 
+  void loadVisits();
+
   document.getElementById("people").innerHTML =
     card("Users", s.users.total) + card("New today", s.users.newToday) +
     card("New this week", s.users.newThisWeek) + card("Tracking", s.usage.tracked) +
@@ -532,6 +565,36 @@ async function load() {
         return "<tr><td>" + h.email + "</td><td>" + h.tier + "</td><td>" + h.searches + "</td><td>" + h.lookups + "</td></tr>";
       }).join("")
     : '<tr><td colspan="4" class="dim">Nothing used yet today.</td></tr>';
+}
+
+async function loadVisits() {
+  var res = await fetch("/admin/visits", { headers: { "x-admin-key": key() } });
+  if (!res.ok) return;
+  var v = await res.json();
+
+  document.getElementById("visits").innerHTML =
+    card("Today", v.today) + card("Last 7 days", v.last7) + card("Last 30 days", v.last30);
+
+  // Oldest to newest, so the chart reads left to right like every other one.
+  var days = v.daily.slice().reverse().slice(-14);
+  var peak = Math.max.apply(null, days.map(function (d) { return d.count; }).concat([1]));
+  document.getElementById("visitTrend").innerHTML = days.map(function (d) {
+    var h = Math.round((d.count / peak) * 100);
+    var label = new Date(d.day + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" });
+    return '<div title="' + d.count + ' visits on ' + d.day + '">' +
+      '<span class="val">' + (d.count || "") + "</span>" +
+      '<span class="col" style="height:' + Math.max(h, 2) + '%"></span>' +
+      '<span class="lab">' + label + "</span></div>";
+  }).join("");
+
+  function rows(list, keyName) {
+    if (!list.length) return "<dt>Nothing yet</dt><dd></dd>";
+    return list.map(function (r) {
+      return "<dt>" + r[keyName] + "</dt><dd>" + r.count + "</dd>";
+    }).join("");
+  }
+  document.getElementById("visitPages").innerHTML = rows(v.topPages, "path");
+  document.getElementById("visitRefs").innerHTML = rows(v.topReferrers, "referrer");
 }
 
 async function loadPromo() {

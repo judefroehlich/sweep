@@ -594,3 +594,30 @@ model PromoCodeRedemption {
 
   @@unique([userId, promoCodeId]) // can't redeem the same code twice
 }
+
+/// One row per day, per page, per referrer — not one row per visit.
+///
+/// Deliberately aggregate. There is no IP, no cookie, no session and no
+/// fingerprint here, so it can answer "how many visits on Tuesday, and how
+/// many came from Reddit" and it cannot answer "did this person come back".
+/// That is the trade, made on purpose: the landing page this counts says the
+/// app has no data to sell, and the honest version of that is having none.
+///
+/// It also means the table grows with days and pages rather than with
+/// traffic, so a good week costs a handful of rows instead of thousands.
+model SiteVisit {
+  id       String   @id @default(uuid())
+  /// Midnight UTC of the day being counted.
+  day      DateTime @db.Date
+  /// Pathname only, query strings dropped — those carry campaign tags and,
+  /// occasionally, whatever somebody pasted into a url.
+  path     String
+  /// Host only, never the full referring url, for the same reason.
+  /// "direct" when there is no referrer.
+  referrer String
+  count    Int      @default(0)
+
+  /// One row per combination, so recording a visit is an upsert.
+  @@unique([day, path, referrer])
+  @@index([day])
+}

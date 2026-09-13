@@ -34,6 +34,7 @@
 // backslash becomes a real line break in the output. Nothing here uses one.
 
 import type { FastifyInstance } from "fastify";
+import { recordVisit } from "../lib/siteVisits.js";
 import { prisma } from "../lib/prisma.js";
 import { RETAILERS, RETAILER_LABELS } from "../lib/scrapers/types.js";
 import { disabledRetailers } from "../lib/scrapers/index.js";
@@ -100,7 +101,16 @@ async function getStats(): Promise<Stats> {
 const number = (n: number) => n.toLocaleString("en-US");
 
 export async function landingRoutes(app: FastifyInstance) {
-  app.get("/", async (_request, reply) => {
+  app.get("/", async (request, reply) => {
+    // Counted, not awaited. A page that renders slowly because the counter is
+    // slow, or not at all because it threw, would be a bad trade for knowing
+    // how many people opened it.
+    void recordVisit(
+      request.url,
+      request.headers["user-agent"],
+      request.headers.referer,
+    );
+
     const stats = await getStats();
     reply.type("text/html; charset=utf-8");
     // Revalidate every time. The page carries live figures and changes with
