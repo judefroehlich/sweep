@@ -4,7 +4,7 @@
 // board — the last one is genuinely useful to a user, not just to us: it
 // explains an empty column in search without them having to guess.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Linking,
@@ -46,6 +46,7 @@ import {
   registerForPushNotifications,
 } from "@/lib/notifications";
 import { supabase } from "@/lib/supabase";
+import { signInWithGoogle, signOutOfGoogle } from "@/lib/googleAuth";
 import { isOffered, setLiveStores } from "@/lib/liveStores";
 
 interface RetailerStatus {
@@ -81,6 +82,17 @@ export default function ProfileScreen() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  // Whether the account can sign in with a password at all. A Google-only
+  // account cannot, so asking it for one would make deletion impossible.
+  const [hasPassword, setHasPassword] = useState(true);
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      const providers = (data.user?.app_metadata?.providers as string[] | undefined) ?? [];
+      // Default to true when unknown: the password route is the one that has
+      // always worked, and the server rejects a wrong guess either way.
+      setHasPassword(providers.length === 0 || providers.includes("email"));
+    });
+  }, []);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchesLeft, setSearchesLeft] = useState<number | null>(null);
@@ -173,11 +185,23 @@ export default function ProfileScreen() {
   }
 
   async function onDeleteAccount() {
-    if (!deletePassword) return setError(t("profile.enterPasswordConfirm"));
+    if (hasPassword && !deletePassword) return setError(t("profile.enterPasswordConfirm"));
     setDeleting(true);
     setConfirmingDelete(false);
     try {
-      await deleteAccount(deletePassword);
+      if (!hasPassword) {
+        // The Google equivalent of typing a password: choose the account again,
+        // right now. The server checks that sign-in is minutes old, so a phone
+        // picked up with a week-old session cannot delete anything.
+        const proof = await signInWithGoogle();
+        if (proof.status !== "signed-in") {
+          setDeleting(false);
+          if (proof.status === "failed") setError(proof.reason);
+          return;
+        }
+      }
+      await deleteAccount(hasPassword ? deletePassword : undefined);
+      await signOutOfGoogle();
       setPushRegistered(null);
       // The session is dead server-side; clearing it locally is what sends the
       // auth gate back to the sign-in screen.
@@ -193,6 +217,9 @@ export default function ProfileScreen() {
 
   async function onSignOut() {
     setConfirmingSignOut(false);
+    // So the next person on this phone gets the Google picker rather than
+    // being signed straight into the previous account.
+    await signOutOfGoogle();
     // Deregister first: after signOut there's no token to authenticate the
     // delete, and a shared device would keep alerting the previous account.
     await deregisterPushNotifications();
@@ -569,13 +596,15 @@ export default function ProfileScreen() {
                 title: t("profile.deleteTitle"),
                 body: t("profile.deleteBodyFull"),
                 subject: email ? { title: email, caption: "This account" } : undefined,
-                input: {
-                  value: deletePassword,
-                  onChangeText: setDeletePassword,
-                  placeholder: "Your password",
-                  secure: true,
-                },
-                confirmLabel: "Delete forever",
+                input: hasPassword
+                  ? {
+                      value: deletePassword,
+                      onChangeText: setDeletePassword,
+                      placeholder: "Your password",
+                      secure: true,
+                    }
+                  : undefined,
+                confirmLabel: hasPassword ? "Delete forever" : t("profile.deleteWithGoogle"),
                 cancelLabel: "Keep my account",
               }
             : null

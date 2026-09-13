@@ -14,6 +14,7 @@ import { storeListPhrase } from "@/lib/format";
 import { setGuestMode } from "@/lib/guestMode";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+import { googleSignInAvailable, signInWithGoogle } from "@/lib/googleAuth";
 import { useTheme, useThemedStyles } from "@/lib/theme";
 import { useTranslate } from "@/lib/i18n";
 import { MIN_PASSWORD_LENGTH, friendlyAuthErrorKey } from "@/lib/authErrors";
@@ -162,6 +163,20 @@ export default function Auth() {
   function fail(text: string) {
     setIsError(true);
     setMessage(text);
+  }
+
+  async function continueWithGoogle() {
+    setMessage(null);
+    setBusy(true);
+    try {
+      const outcome = await signInWithGoogle();
+      // Nothing to do on success: the root layout sees the new session, syncs
+      // the account and routes away from this screen, exactly as it does for
+      // an email sign-in.
+      if (outcome.status === "failed") fail(outcome.reason);
+    } finally {
+      setBusy(false);
+    }
   }
 
   /**
@@ -473,6 +488,28 @@ export default function Auth() {
         disabled={busy}
       />
 
+      {/* Only offered when this build has a client id. A button that opens the
+          Google sheet and then fails every time is worse than no button. */}
+      {googleSignInAvailable() && (
+        <>
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>{t("auth.or")}</Text>
+            <View style={styles.orLine} />
+          </View>
+          <Pressable
+            onPress={continueWithGoogle}
+            disabled={busy}
+            style={({ pressed }) => [styles.googleButton, pressed && styles.googlePressed]}
+            accessibilityRole="button"
+            accessibilityLabel={t("auth.google")}
+          >
+            <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
+            <Text style={styles.googleText}>{t("auth.google")}</Text>
+          </Pressable>
+        </>
+      )}
+
       {/* Below the buttons, not beside the password field: it's a recovery
           path, not part of signing in, and it should be findable without
           competing with the thing most people are here to do. */}
@@ -594,6 +631,33 @@ const makeStyles = (colors: Palette) =>
       paddingVertical: spacing.xs,
     },
     messageOk: { color: colors.success },
+    orRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginVertical: spacing.sm,
+    },
+    orLine: { flex: 1, height: 1, backgroundColor: colors.surfaceBorder },
+    orText: { color: colors.textTertiary, fontSize: type.caption.fontSize },
+    // Outlined rather than filled. Google's own guidance is a neutral button,
+    // and a second orange button would compete with Sign up for the eye.
+    googleButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      paddingVertical: 14,
+    },
+    googlePressed: { opacity: 0.7 },
+    googleText: {
+      color: colors.textPrimary,
+      fontSize: type.body.fontSize,
+      fontWeight: "700",
+    },
     forgotButton: { paddingVertical: spacing.sm, alignItems: "center" },
     forgotText: {
       color: colors.textSecondary,

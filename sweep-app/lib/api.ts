@@ -122,7 +122,8 @@ async function request<T>(
     response.status === 401 &&
     token &&
     payload?.code !== "PASSWORD_INCORRECT" &&
-    payload?.code !== "PASSWORD_REQUIRED"
+    payload?.code !== "PASSWORD_REQUIRED" &&
+    payload?.code !== "REAUTH_REQUIRED"
   ) {
     await supabase.auth.signOut().catch(() => {});
   }
@@ -1204,12 +1205,15 @@ export function refreshRadar(id: string) {
  * Required by Google Play. Irreversible — the confirmation flag is enforced
  * server-side too, so this can't fire from a stray call.
  */
-export function deleteAccount(password: string) {
+export function deleteAccount(password?: string) {
+  // Omitted for an account with no password — a Google account. The server
+  // then requires a sign-in from the last few minutes instead, which the
+  // profile screen gets by showing the Google picker immediately beforehand.
   return request<{
     ok: true;
     deleted: Record<string, number>;
     authRecordRemoved: boolean;
-  }>("/me", { method: "DELETE", body: { confirm: true, password } });
+  }>("/me", { method: "DELETE", body: { confirm: true, ...(password ? { password } : {}) } });
 }
 
 // ---- promo codes -------------------------------------------------------------

@@ -85,6 +85,8 @@ export const en = {
   },
 
   auth: {
+    or: "or",
+    google: "Continue with Google",
     tagline: "Sweep — your online shopping buddy",
     email: "Email",
     password: "Password",
@@ -461,6 +463,7 @@ export const en = {
       "Your tracked products, lists and budget stay safe — you'll just need to sign back in to see them.",
     signedInAs: "Signed in as",
     deleteAccount: "Delete my account",
+    deleteWithGoogle: "Confirm with Google",
     deleteTitle: "Delete your account?",
     deleteBody:
       "This erases your tracked products, lists, budget, radars and XP. It cannot be undone.",
@@ -847,6 +850,8 @@ export const es: Translations = {
   },
 
   auth: {
+    or: "o",
+    google: "Continuar con Google",
     tagline: "Sweep — tu compañero de compras online",
     email: "Correo",
     password: "Contraseña",
@@ -1228,6 +1233,7 @@ export const es: Translations = {
       "Tus productos seguidos, listas y presupuesto se quedan a salvo; solo tendrás que volver a iniciar sesión para verlos.",
     signedInAs: "Sesión iniciada como",
     deleteAccount: "Eliminar mi cuenta",
+    deleteWithGoogle: "Confirmar con Google",
     deleteTitle: "¿Eliminar tu cuenta?",
     deleteBody:
       "Esto borra tus productos seguidos, listas, presupuesto, radares y XP. No se puede deshacer.",
