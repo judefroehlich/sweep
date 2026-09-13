@@ -1,0 +1,42 @@
+Sweep is a price tracker and price comparison app that searches Amazon, Walmart, Best Buy, eBay and Etsy at once, tracks price drops, and tells you when a discount is actually a discount.
+
+ONE SEARCH, EVERY STORE
+Compare prices across five stores in a single search. Results come back in one grid, ordered so every store's best match is near the top, and each store appears the moment it answers instead of making you wait for the slowest. No more opening six tabs to work out who is actually cheapest.
+
+Top picks pull out the cheapest option, the best reviewed and the biggest price drop across every store. Star results to compare them side by side, even across different searches.
+
+IS THAT SALE REAL?
+Most "40% off" badges can't be checked, because the store sets both the original price and the discount. Sweep keeps its own price history, so it can tell you when a sale price is really just the normal price. Every product shows its lowest, average and highest price, so you know whether today is genuinely a good time to buy or whether that discount has been sitting there all month.
+
+PRICE DROP ALERTS
+Paste a product link and Sweep tracks the price for you. When it drops, you get a notification while the deal is still live, not a week after it ended. Missed a notification? Every alert is kept in the app. Sort your tracked items by best deal, biggest drop, newest or cheapest, and filter by name or store. On Pro and Ultimate, set your own target price and only hear about it when it falls below your number.
+
+LOOK UP ANY PRODUCT
+Open any product and get the full picture on one page: ratings, what buyers actually said in reviews (split into what they liked and what they didn't), seller information, similar products that may cost less, and the real price history.
+
+NO AI GUESSING
+Every price in Sweep is read from the store's own listing, never predicted. When a store doesn't publish something, Sweep leaves it blank and tells you which store didn't publish it, instead of filling the gap with something that sounds right.
+
+DEAL RADAR
+Tracking watches one item. Deal Radar watches for anything matching what you want under your price. Describe what you're after, set a price, and the radar stays up for weeks, checking new results. Free radars refresh when you tap. Pro and Ultimate check automatically in the background and notify you.
+
+A CART ACROSS STORES
+Collect things from anywhere you have searched or tracked. Sweep adds up the total across every shop and shows how that total has moved since you added each item.
+
+LISTS AND WISHLISTS
+Make gift lists and wishlists for birthdays, holidays and Black Friday, then share a link. Whoever you send it to sees live prices and can mark off what they have bought, so nobody buys the same gift twice.
+
+BUDGET TRACKER
+Log what you spend on shopping, set a monthly budget, and see where the money actually went. Bought something you were tracking? One tap adds it.
+
+DEALS AND LEADERBOARD
+Browse real price drops other shoppers have found. Earn XP by finding good deals, never by spending money, and climb the leaderboard.
+
+FREE, GENUINELY
+Price comparison, price drop alerts, price history, lists, the cart and the budget tracker all cost nothing. The free plan includes 10 searches and 12 product lookups a day and tracks 3 products. No card required, and no trial that quietly turns into a charge. Nothing interrupts you while you use the app. The only ad is one you can choose to watch for an extra search.
+
+Pro and Ultimate are optional monthly or yearly subscriptions. They raise how many products you can track, how often prices are checked, how many searches and lookups you get each day, and how much price history you can see.
+
+Sweep is built by one independent developer. Sweep reads prices from publicly available retailer pages and is not affiliated with, endorsed by, or sponsored by any retailer it compares.
+
+Questions or problems: support@sweepshopping.com
