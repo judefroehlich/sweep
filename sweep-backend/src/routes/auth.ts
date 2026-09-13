@@ -1,8 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { requireAuth, verifyPassword } from "../lib/auth.js";
+import { requireAuth, secondsSinceSignIn, verifyPassword } from "../lib/auth.js";
 import { SENSITIVE_LIMIT } from "../lib/rateLimit.js";
 import { deleteAccount } from "../lib/deleteAccount.js";
 import { prisma } from "../lib/prisma.js";
+
+/**
+ * How recent a sign-in has to be to stand in for a password.
+ *
+ * Ten minutes: long enough to sign in, find the setting and read the warning,
+ * short enough that a phone left unlocked on a table has aged out of it.
+ */
+const RECENT_SIGN_IN_SECONDS = 10 * 60;
 
 export async function authRoutes(app: FastifyInstance) {
   app.post(
@@ -80,14 +88,35 @@ export async function authRoutes(app: FastifyInstance) {
       });
       if (!user) return reply.status(404).send({ error: "Account not found" });
 
-      if (typeof password !== "string" || !password) {
-        return reply.status(400).send({
-          error: "Enter your password to delete your account.",
-          code: "PASSWORD_REQUIRED",
-        });
+      // Two ways to pass, because an account made with Google has no password
+      // to type. Either give the right password, or have signed in within the
+      // last few minutes — for a Google account that means choosing it again
+      // in the Google sheet immediately before deleting.
+      //
+      // Both prove the same thing: that whoever is holding the phone right now
+      // can authenticate as this person. A token from last week cannot, which
+      // is the case this check exists for. And it is still enforced here rather
+      // than in the app, so calling the API directly with an old token fails.
+      //
+      // Before this, the route required a password outright, which made
+      // deletion impossible for Google accounts — and in-app deletion is a Play
+      // requirement, not a nicety.
+      const token = (request.headers.authorization ?? "").slice(7);
+      const hasPassword = typeof password === "string" && password.length > 0;
+
+      if (!hasPassword) {
+        const age = secondsSinceSignIn(token);
+        if (age === null || age > RECENT_SIGN_IN_SECONDS) {
+          return reply.status(403).send({
+            error: "Sign in again to confirm it's you, then delete your account.",
+            code: "REAUTH_REQUIRED",
+          });
+        }
       }
 
-      const { error: reauthError } = await verifyPassword(user.email, password);
+      const { error: reauthError } = hasPassword
+        ? await verifyPassword(user.email, password as string)
+        : { error: null };
       if (reauthError) {
         // 403, not 401. The session IS valid — the caller simply failed a
         // second check. The app treats any 401-with-a-token as a dead session

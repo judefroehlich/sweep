@@ -99,3 +99,34 @@ export async function verifyPassword(email: string, password: string) {
   const { error } = await client.auth.signInWithPassword({ email, password });
   return { error };
 }
+
+/**
+ * Seconds since this token's holder last actually signed in.
+ *
+ * Read from the JWT's `amr` claim, which records the authentication event
+ * itself — a password entered, a Google account chosen — and is carried
+ * forward unchanged when the session silently refreshes. That is what makes it
+ * useful: `iat` resets on every refresh and says nothing about when anybody
+ * last proved who they were.
+ *
+ * ONLY SAFE AFTER requireAuth. This decodes the payload without checking the
+ * signature, because Supabase already checked it in getUser(); on a token that
+ * has not been through that, anybody could write any timestamp they liked.
+ *
+ * Null when there is no usable claim, which callers must treat as "not recent"
+ * rather than as a pass.
+ */
+export function secondsSinceSignIn(token: string): number | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")) as {
+      amr?: { method?: string; timestamp?: number }[];
+    };
+    const stamps = (payload.amr ?? [])
+      .map((entry) => entry.timestamp)
+      .filter((t): t is number => typeof t === "number" && Number.isFinite(t));
+    if (stamps.length === 0) return null;
+    return Math.max(0, Date.now() / 1000 - Math.max(...stamps));
+  } catch {
+    return null;
+  }
+}

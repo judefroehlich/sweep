@@ -53,7 +53,8 @@
     "test:appads": "tsx src/test-appads.ts",
     "test:admobssv": "tsx src/test-admobssv.ts",
     "test:visits": "tsx src/test-visits.ts",
-    "db:migrate:dev": "tsx src/migrate-dev.ts"
+    "db:migrate:dev": "tsx src/migrate-dev.ts",
+    "test:reauth": "tsx src/test-reauth.ts"
   },
   "keywords": [],
   "author": "",
