@@ -16,6 +16,8 @@
 // every parser keeps working untouched and the day an official API arrives
 // this file is deleted rather than unpicked.
 
+import { recordProviderUse } from "../providerCredits.js";
+
 const ENDPOINT = "https://scraper-api.decodo.com/v2/scrape";
 
 /**
@@ -71,6 +73,10 @@ export async function fetchViaDecodo(url: string): Promise<string> {
       res.status === 403 ? "blocked" : "failed",
     );
   }
+
+  // Billed from here on: Decodo charges for any request that got a page back,
+  // including a challenge page that turns out to be useless below.
+  void recordProviderUse("decodo");
 
   const body = (await res.json()) as {
     results?: { content?: string }[];

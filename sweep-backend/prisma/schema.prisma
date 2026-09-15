@@ -621,3 +621,41 @@ model SiteVisit {
   @@unique([day, path, referrer])
   @@index([day])
 }
+
+/// How much of each paid scraping provider's allowance is gone.
+///
+/// Counted at the moment a billed request is made, not from ScrapeCheck. The
+/// check log only covers some paths (a search leg, a lookup, "Sweep this deal"
+/// all bill without writing one), and against the providers' own dashboards it
+/// read less than half the real figure. An alert built on it would fire after
+/// the credits were already gone.
+///
+/// Drift is still possible, so `used` can be overwritten from the dashboard
+/// with whatever the provider itself says.
+model ProviderCredit {
+  /// "decodo" or "brightdata".
+  provider     String    @id
+  /// "total" for an allowance that never refills, "2026-09" for a monthly one.
+  /// A new month resets `used` and `alertedLevel` on the first request.
+  period       String
+  used         Int       @default(0)
+  /// Null falls back to the known free-tier allowance.
+  allowance    Int?
+  /// The highest threshold (70, 90, 100) already emailed this period, so each
+  /// one sends once rather than on every request past it.
+  alertedLevel Int       @default(0)
+  /// When `used` was last corrected from the provider's own number.
+  syncedAt     DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Billed requests per provider per day. Only here to answer "how fast is it
+/// going", which is what turns a percentage into a date.
+model ProviderCreditDay {
+  id       String   @id @default(uuid())
+  provider String
+  day      DateTime @db.Date
+  count    Int      @default(0)
+
+  @@unique([provider, day])
+}

@@ -197,19 +197,11 @@ try {
   console.log("\n— provider credits —");
   check("every metered provider is reported", stats.providers.length >= 2, stats.providers.length);
   for (const p of stats.providers) {
-    check(`${p.name} names the store it serves`, Boolean(p.serves));
-    check(`${p.name} usage is a real count`, Number.isInteger(p.used) && p.used >= 0, p.used);
-    // An unset allowance must read as "unknown", never as zero left.
-    check(
-      `${p.name} percent is null or 0-100`,
-      p.percent === null || (p.percent >= 0 && p.percent <= 100),
-      p.percent,
-    );
-    check(
-      `${p.name} has no percent without an allowance`,
-      (p.allowance === null) === (p.percent === null),
-      { allowance: p.allowance, percent: p.percent },
-    );
+    check(`${p.label} names the store it serves`, Boolean(p.serves));
+    check(`${p.label} usage is a real count`, Number.isInteger(p.used) && p.used >= 0, p.used);
+    check(`${p.label} has an allowance`, p.allowance > 0, p.allowance);
+    check(`${p.label} percent is 0-100`, p.percent >= 0 && p.percent <= 100, p.percent);
+    check(`${p.label} remaining is allowance minus used`, p.remaining === Math.max(0, p.allowance - p.used));
   }
 
   console.log("\n— the week —");

@@ -29,6 +29,8 @@ import { getAdminStats } from "../lib/adminStats.js";
 import { createPromoCode, deletePromoCode, listPromoCodes } from "../lib/promoAdmin.js";
 import { probe, probeAdapter, probeDirect, recentStress, stress } from "../lib/probe.js";
 import { getVisitSummary } from "../lib/siteVisits.js";
+import { composeAlert, getProviderCredits, isProvider, syncProviderCredits } from "../lib/providerCredits.js";
+import { isAlertEmailConfigured, sendAdminAlert } from "../lib/alertEmail.js";
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/admin", async (_request, reply) => {
@@ -44,6 +46,38 @@ export async function adminRoutes(app: FastifyInstance) {
   // what is deliberately not stored and why.
   app.get("/admin/visits", { preHandler: requireAdmin }, async () => {
     return getVisitSummary();
+  });
+
+  // Correct the credit count from the provider's own dashboard. Sweep counts
+  // what it sends, and anything it can't see (a test from a laptop, a retry the
+  // provider billed) only shows up there.
+  app.post("/admin/credits/sync", { preHandler: requireAdmin }, async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (!isProvider(body.provider)) return reply.status(400).send({ error: "Pick a provider." });
+    const num = (v: unknown) => (v === undefined || v === null || v === "" ? undefined : Number(v));
+    try {
+      const summary = await syncProviderCredits(body.provider, {
+        used: num(body.used),
+        remaining: num(body.remaining),
+        allowance: num(body.allowance),
+      });
+      request.log.info({ provider: summary.provider, used: summary.used, allowance: summary.allowance }, "credits synced");
+      return { ok: true, provider: summary };
+    } catch (err) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : "Couldn't save that." });
+    }
+  });
+
+  // Send a sample credit alert, so the first real one isn't also the first
+  // time anyone finds out whether email works.
+  app.post("/admin/alerts/test", { preHandler: requireAdmin }, async () => {
+    const [first] = await getProviderCredits();
+    const { subject, body } = composeAlert(first, 70);
+    const result = await sendAdminAlert(
+      "[TEST] " + subject,
+      "This is a test. Nothing crossed a line.\n\n" + body,
+    );
+    return { result, configured: isAlertEmailConfigured() };
   });
 
   // Fetch a url from wherever this server is, and report what came back.
@@ -282,6 +316,21 @@ const PAGE = `<!doctype html>
   <p class="sub">What the metered stores are spending. Running out takes the
   store down, so this is a deadline rather than a gauge.</p>
   <div id="providers"></div>
+  <p class="sub" style="margin-top:12px">Emails at 50, 70, 90 and 100%. If a
+  provider's own dashboard shows a different number, type it in here.</p>
+  <div class="row">
+    <select id="cProvider">
+      <option value="brightdata">Bright Data (Amazon)</option>
+      <option value="decodo">Decodo (Walmart)</option>
+    </select>
+    <input id="cRemaining" type="number" min="0" placeholder="Left">
+    <input id="cUsed" type="number" min="0" placeholder="or used">
+  </div>
+  <input id="cAllowance" type="number" min="1" placeholder="Allowance (blank = keep the current one)">
+  <div class="row">
+    <button onclick="syncCredits()">Save</button>
+    <button class="secondary" onclick="testAlert()">Send a test alert</button>
+  </div>
 
   <h2>Last 7 days</h2>
   <div class="spark" id="trend"></div>
@@ -513,18 +562,20 @@ async function load() {
 
   document.getElementById("providers").innerHTML = s.providers.map(function (p) {
     var pct = p.percent;
-    var cls = pct === null ? "" : pct >= 90 ? "bad" : pct >= 70 ? "warn" : "";
-    var right = p.allowance === null
-      ? p.used.toLocaleString() + " calls"
-      : p.used.toLocaleString() + " / " + p.allowance.toLocaleString() + " (" + pct + "%)";
-    var bar = p.allowance === null
-      ? '<div class="sub" style="margin:6px 0 0;font-size:12px">Set ' +
-        (p.name === "Decodo" ? "DECODO_CREDITS" : "BRIGHTDATA_CREDITS") +
-        " to see how much is left.</div>"
-      : '<div class="bar"><i class="' + cls + '" style="width:' + Math.max(pct, 2) + '%"></i></div>';
-    return '<div class="prov"><div class="provTop"><b>' + p.name +
-      '</b><span class="who">' + p.serves + " &middot; " + p.window +
-      '</span><span class="num">' + right + "</span></div>" + bar + "</div>";
+    var cls = pct >= 90 ? "bad" : pct >= 70 ? "warn" : "";
+    var right = p.remaining.toLocaleString() + " left of " + p.allowance.toLocaleString();
+    var pace = p.daysLeft === null
+      ? "Nothing used in the last day."
+      : "About " + p.perDay.toLocaleString() + " a day, so roughly " +
+        (p.daysLeft < 1 ? Math.max(1, Math.round(p.daysLeft * 24)) + " hours" : Math.round(p.daysLeft) + " days") + " left.";
+    var synced = p.syncedAt
+      ? " Synced " + new Date(p.syncedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + "."
+      : " Never synced with the provider.";
+    return '<div class="prov"><div class="provTop"><b>' + p.label +
+      '</b><span class="who">' + p.serves + " &middot; " + (p.window === "monthly" ? "resets monthly" : "one-time") +
+      '</span><span class="num">' + right + " (" + pct + '% used)</span></div>' +
+      '<div class="bar"><i class="' + cls + '" style="width:' + Math.max(pct, 2) + '%"></i></div>' +
+      '<div class="sub" style="margin:6px 0 0;font-size:12px">' + pace + synced + "</div></div>";
   }).join("");
 
   var peak = Math.max.apply(null, s.trend.map(function (d) { return d.checks; }).concat([1]));
@@ -565,6 +616,36 @@ async function load() {
         return "<tr><td>" + h.email + "</td><td>" + h.tier + "</td><td>" + h.searches + "</td><td>" + h.lookups + "</td></tr>";
       }).join("")
     : '<tr><td colspan="4" class="dim">Nothing used yet today.</td></tr>';
+}
+
+async function syncCredits() {
+  var body = {
+    provider: document.getElementById("cProvider").value,
+    remaining: document.getElementById("cRemaining").value,
+    used: document.getElementById("cUsed").value,
+    allowance: document.getElementById("cAllowance").value,
+  };
+  if (body.remaining === "" && body.used === "") return say("Enter how many are left or how many are used.", true);
+  if (body.remaining !== "" && body.used !== "") body.used = "";
+  var res = await fetch("/admin/credits/sync", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-admin-key": key() },
+    body: JSON.stringify(body),
+  });
+  var d = await res.json().catch(function () { return {}; });
+  if (!res.ok) return say(d.error || "Couldn't save that.", true);
+  say(d.provider.label + ": " + d.provider.remaining.toLocaleString() + " left.");
+  ["cRemaining", "cUsed", "cAllowance"].forEach(function (id) { document.getElementById(id).value = ""; });
+  load();
+}
+
+async function testAlert() {
+  var res = await fetch("/admin/alerts/test", { method: "POST", headers: { "x-admin-key": key() } });
+  var d = await res.json().catch(function () { return {}; });
+  if (!res.ok) return say("Couldn't send it.", true);
+  if (d.result === "sent") say("Sent. Check your inbox (and spam).");
+  else if (d.result === "logged") say("Email isn't set up on the server (no SMTP_HOST/SMTP_USER/SMTP_PASS), so alerts only go to the Railway log.", true);
+  else say("The mail server refused it. Check the Railway log for why.", true);
 }
 
 async function loadVisits() {

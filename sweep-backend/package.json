@@ -54,7 +54,8 @@
     "test:admobssv": "tsx src/test-admobssv.ts",
     "test:visits": "tsx src/test-visits.ts",
     "db:migrate:dev": "tsx src/migrate-dev.ts",
-    "test:reauth": "tsx src/test-reauth.ts"
+    "test:reauth": "tsx src/test-reauth.ts",
+    "test:credits": "tsx src/test-credits.ts"
   },
   "keywords": [],
   "author": "",

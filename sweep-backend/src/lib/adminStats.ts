@@ -16,32 +16,7 @@ import { cooldownRemaining } from "./scrapers/cooldown.js";
 import { isRetailerEnabled } from "./scrapers/index.js";
 import { WALLET_TIER_SELECT, effectiveTier } from "./tiers.js";
 import { PRICING } from "./plans.js";
-
-/**
- * What each paid provider gives us, and over what period.
- *
- * Read from the environment so a plan change is a Railway variable rather than
- * a deploy. Unset means the usage still shows as a count — a number with no
- * ceiling is less useful than a gauge, but far more useful than nothing, and
- * guessing an allowance would be worse than admitting we don't know it.
- *
- * Decodo's free tier is a total, not a monthly reset, so its window is all
- * time. Bright Data's is per calendar month.
- */
-const PROVIDERS = [
-  {
-    name: "Decodo",
-    serves: "walmart" as const,
-    envVar: "DECODO_CREDITS",
-    window: "all time" as const,
-  },
-  {
-    name: "Bright Data",
-    serves: "amazon" as const,
-    envVar: "BRIGHTDATA_CREDITS",
-    window: "this month" as const,
-  },
-];
+import { getProviderCredits, type ProviderCreditSummary } from "./providerCredits.js";
 
 export interface AdminStats {
   users: { total: number; newToday: number; newThisWeek: number };
@@ -83,7 +58,7 @@ export interface AdminStats {
    * deadline rather than a gauge. Running out of Decodo credits takes Walmart
    * down, and the first sign of it today is the store failing.
    */
-  providers: ProviderUsage[];
+  providers: ProviderCreditSummary[];
   /**
    * Seven days of signups and checks, oldest first.
    *
@@ -94,19 +69,6 @@ export interface AdminStats {
   /** Monthly recurring revenue, estimated from tier counts at list price. */
   revenue: { monthly: number; pro: number; ultimate: number };
   generatedAt: string;
-}
-
-export interface ProviderUsage {
-  name: string;
-  /** The retailer it serves, so a failure here has an obvious consequence. */
-  serves: string;
-  used: number;
-  /** Null when the allowance isn't configured — shown as a count, not a gauge. */
-  allowance: number | null;
-  /** What "used" is counted over, in words. */
-  window: string;
-  /** used/allowance as a percentage, or null. */
-  percent: number | null;
 }
 
 function startOfToday(): Date {
@@ -139,7 +101,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     heaviestRows,
     notificationsToday,
     unread,
-    providerRows,
+    providers,
     signupRows,
     checkRows,
   ] = await Promise.all([
@@ -175,14 +137,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     prisma.notification.count({ where: { createdAt: { gte: today } } }),
     prisma.notification.count({ where: { readAt: null } }),
 
-    // Provider spend. One ScrapeCheck row is one billed call for the metered
-    // retailers, so this is counted from what we already record rather than
-    // from an API nobody has to be reachable for.
-    prisma.scrapeCheck.groupBy({
-      by: ["retailer"],
-      where: { retailer: { in: PROVIDERS.map((p) => p.serves) } },
-      _count: { _all: true },
-    }),
+    // Counted where each billed request is made, not from ScrapeCheck, which
+    // misses most of them. See lib/providerCredits.ts.
+    getProviderCredits(),
 
     // Seven days of signups, one row per day.
     prisma.$queryRaw<{ day: Date; n: bigint }[]>`
@@ -198,16 +155,6 @@ export async function getAdminStats(): Promise<AdminStats> {
       GROUP BY 1 ORDER BY 1
     `,
   ]);
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthToDate = await prisma.scrapeCheck.groupBy({
-    by: ["retailer"],
-    where: {
-      retailer: { in: PROVIDERS.filter((p) => p.window === "this month").map((p) => p.serves) },
-      checkedAt: { gte: monthStart },
-    },
-    _count: { _all: true },
-  });
 
   const tiers = { free: 0, pro: 0, ultimate: 0 };
   let searchesToday = 0;
@@ -252,20 +199,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     })),
     notifications: { sentToday: notificationsToday, unreadTotal: unread },
 
-    providers: PROVIDERS.map((provider) => {
-      const rows = provider.window === "this month" ? monthToDate : providerRows;
-      const used = rows.find((r) => r.retailer === provider.serves)?._count._all ?? 0;
-      const raw = Number(process.env[provider.envVar]);
-      const allowance = Number.isFinite(raw) && raw > 0 ? raw : null;
-      return {
-        name: provider.name,
-        serves: RETAILER_LABELS[provider.serves],
-        used,
-        allowance,
-        window: provider.window,
-        percent: allowance ? Math.min(100, Math.round((used / allowance) * 100)) : null,
-      };
-    }),
+    providers,
 
     trend: buildTrend(sevenDaysAgo, signupRows, checkRows),
 

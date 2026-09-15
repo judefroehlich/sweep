@@ -10,7 +10,7 @@
 //   2. runHealthCheck() — a scheduled sweep over recent outcomes that emails
 //      once per incident when a retailer's failure rate crosses the threshold.
 
-import nodemailer from "nodemailer";
+import { sendAdminAlert } from "./alertEmail.js";
 import { prisma } from "./prisma.js";
 import { RETAILERS, type Retailer, type ScrapeStatus } from "./scrapers/types.js";
 
@@ -163,18 +163,6 @@ export async function runHealthCheck(): Promise<RetailerHealth[]> {
 
 // ---- email -----------------------------------------------------------------
 
-function mailer() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
-
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT ?? 587),
-    secure: Number(SMTP_PORT ?? 587) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-}
-
 async function sendAlertEmail(health: RetailerHealth) {
   const pct = Math.round(health.failureRate * 100);
   const subject = `[Sweep] ${health.retailer} scraper failing (${pct}%)`;
@@ -195,22 +183,5 @@ async function sendAlertEmail(health: RetailerHealth) {
       : `Mostly FAILED — likely a page structure change. Run: npm run test:scrapers`,
   ].join("\n");
 
-  const transport = mailer();
-  if (!transport) {
-    // Without SMTP configured the alert still has to be visible somewhere.
-    console.error(`\n[health] ALERT (SMTP not configured)\n${subject}\n${body}\n`);
-    return;
-  }
-
-  try {
-    await transport.sendMail({
-      from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
-      to: process.env.ALERT_EMAIL ?? process.env.SMTP_USER!,
-      subject,
-      text: body,
-    });
-    console.log(`[health] alert sent for ${health.retailer}`);
-  } catch (err) {
-    console.error("[health] failed to send alert email:", err);
-  }
+  await sendAdminAlert(subject, body);
 }

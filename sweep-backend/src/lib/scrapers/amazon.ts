@@ -25,6 +25,7 @@ import {
   ok,
   toCents,
 } from "./types.js";
+import { recordProviderUse } from "../providerCredits.js";
 
 const API_BASE = "https://api.brightdata.com/datasets/v3";
 
@@ -125,12 +126,12 @@ async function runJob(
   });
 
   if (res.status === 200) {
-    return parseRows(await res.text());
+    return billed(parseRows(await res.text()));
   }
 
   if (res.status === 202) {
     const { snapshot_id } = (await res.json()) as { snapshot_id: string };
-    return pollSnapshot(snapshot_id, apiKey);
+    return billed(await pollSnapshot(snapshot_id, apiKey));
   }
 
   const errorBody = await res.text();
@@ -140,6 +141,17 @@ async function runJob(
     `Bright Data returned ${res.status}: ${errorBody.slice(0, 400)}`,
     res.status === 429 ? "blocked" : "failed",
   );
+}
+
+/**
+ * Count what Bright Data charges for: one record per row delivered. A search
+ * for four results is four records, not one. Rows carrying an error came back
+ * because of include_errors and aren't billed.
+ */
+function billed(rows: any[] | null): any[] | null {
+  const records = (rows ?? []).filter((row) => row && typeof row === "object" && !row.error).length;
+  if (records > 0) void recordProviderUse("brightdata", records);
+  return rows;
 }
 
 // ---- shared: poll until the async job is ready, then fetch results ----
