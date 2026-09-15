@@ -661,7 +661,7 @@ async function testAlert() {
     var d = await res.json().catch(function () { return {}; });
     if (!res.ok) return creditsSay("The server refused it (" + res.status + ").", true);
     if (d.result === "sent") creditsSay("Sent. Check your inbox, and spam.", false);
-    else if (d.result === "logged") creditsSay("Email isn't set up on the server (SMTP_HOST, SMTP_USER, SMTP_PASS), so alerts only go to the Railway log.", true);
+    else if (d.result === "logged") creditsSay("Email isn't set up on the server (RESEND_API_KEY and ALERT_EMAIL), so alerts only go to the Railway log.", true);
     else creditsSay("Sending failed: " + (d.error || "no reason given"), true);
   } finally {
     button.disabled = false;
