@@ -27,7 +27,7 @@ No redirect URIs needed. Copy both:
 - **Client ID** → goes in the app, as `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
 - **Client secret** → goes in Supabase only. Never in the app.
 
-Yes, the *web* client, even though Sweep is an Android app. Supabase verifies the
+Yes, the _web_ client, even though Sweep is an Android app. Supabase verifies the
 token against it. This is the most common mix-up.
 
 ## 3. Google Cloud — the ANDROID clients
@@ -35,11 +35,11 @@ token against it. This is the most common mix-up.
 **Create credentials → OAuth client ID → Android**, package name
 `com.sweepshopping.app`, once per signing certificate. You need all three:
 
-| Certificate | Where to find its SHA-1 |
-| ----------- | ----------------------- |
-| Debug (local `expo run:android`) | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` |
-| EAS upload key | `npx eas-cli credentials` → Android → production → keystore |
-| **Play App Signing** | Play Console → Test and release → Setup → **App integrity** → App signing key certificate |
+| Certificate                      | Where to find its SHA-1                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| Debug (local `expo run:android`) | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`                             |
+| EAS upload key                   | `npx eas-cli credentials` → Android → production → keystore                               |
+| **Play App Signing**             | Play Console → Test and release → Setup → **App integrity** → App signing key certificate |
 
 **Do not skip the Play App Signing one.** Google re-signs the app before
 delivering it, so the build people download from the store is signed with a key
@@ -54,8 +54,8 @@ Dashboard → **Authentication → Providers → Google** → enable.
 - Client ID: the **web** client ID from step 2
 - Client secret: the **web** client secret from step 2
 
-If signing in fails with *"Passed nonce and nonce in id_token should either both
-exist or not"*, turn on **Skip nonce checks** on that same page. The free version
+If signing in fails with _"Passed nonce and nonce in id_token should either both
+exist or not"_, turn on **Skip nonce checks** on that same page. The free version
 of the sign-in library does not send a nonce.
 
 ## 5. The client id, in two places
@@ -68,7 +68,7 @@ For Play builds, in `sweep-app/eas.json` under `build.production.env`, alongside
 the other `EXPO_PUBLIC_` values.
 
 A client id is not a secret — it ships inside every copy of the app — so it is
-fine in `eas.json`. The client *secret* never goes near the app.
+fine in `eas.json`. The client _secret_ never goes near the app.
 
 ## 6. A new build
 
@@ -89,10 +89,10 @@ This is native code, so JavaScript updates alone will not add it. Either:
 
 ## When it doesn't
 
-| Symptom | Almost always |
-| ------- | ------------- |
-| No button at all | Old build without the native module, or no client id in that build |
-| `DEVELOPER_ERROR` | A SHA-1 isn't registered — usually the Play App Signing one |
+| Symptom                        | Almost always                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| No button at all               | Old build without the native module, or no client id in that build                         |
+| `DEVELOPER_ERROR`              | A SHA-1 isn't registered — usually the Play App Signing one                                |
 | "Google didn't return a token" | Wrong web client id, or the web and Android clients are in different Google Cloud projects |
-| Nonce error | Step 4, skip nonce checks |
-| Only you can sign in | Consent screen still in Testing |
+| Nonce error                    | Step 4, skip nonce checks                                                                  |
+| Only you can sign in           | Consent screen still in Testing                                                            |
