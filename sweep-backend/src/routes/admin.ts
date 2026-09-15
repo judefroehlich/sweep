@@ -73,11 +73,11 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post("/admin/alerts/test", { preHandler: requireAdmin }, async () => {
     const [first] = await getProviderCredits();
     const { subject, body } = composeAlert(first, 70);
-    const result = await sendAdminAlert(
+    const sent = await sendAdminAlert(
       "[TEST] " + subject,
       "This is a test. Nothing crossed a line.\n\n" + body,
     );
-    return { result, configured: isAlertEmailConfigured() };
+    return { ...sent, configured: isAlertEmailConfigured() };
   });
 
   // Fetch a url from wherever this server is, and report what came back.
@@ -329,8 +329,9 @@ const PAGE = `<!doctype html>
   <input id="cAllowance" type="number" min="1" placeholder="Allowance (blank = keep the current one)">
   <div class="row">
     <button onclick="syncCredits()">Save</button>
-    <button class="secondary" onclick="testAlert()">Send a test alert</button>
+    <button class="secondary" id="cTest" onclick="testAlert()">Send a test alert</button>
   </div>
+  <p class="sub" id="cOut" style="margin-top:8px"></p>
 
   <h2>Last 7 days</h2>
   <div class="spark" id="trend"></div>
@@ -618,6 +619,14 @@ async function load() {
     : '<tr><td colspan="4" class="dim">Nothing used yet today.</td></tr>';
 }
 
+// Results are written next to the buttons, not to the banner at the top of
+// the page, which is a long scroll away from here and gone after six seconds.
+function creditsSay(text, bad) {
+  var el = document.getElementById("cOut");
+  el.textContent = text;
+  el.style.color = bad ? "#dc2626" : "#16a34a";
+}
+
 async function syncCredits() {
   var body = {
     provider: document.getElementById("cProvider").value,
@@ -625,27 +634,38 @@ async function syncCredits() {
     used: document.getElementById("cUsed").value,
     allowance: document.getElementById("cAllowance").value,
   };
-  if (body.remaining === "" && body.used === "") return say("Enter how many are left or how many are used.", true);
+  if (body.remaining === "" && body.used === "") return creditsSay("Enter how many are left or how many are used.", true);
   if (body.remaining !== "" && body.used !== "") body.used = "";
+  creditsSay("Saving...", false);
   var res = await fetch("/admin/credits/sync", {
     method: "POST",
     headers: { "content-type": "application/json", "x-admin-key": key() },
     body: JSON.stringify(body),
-  });
+  }).catch(function () { return null; });
+  if (!res) return creditsSay("Couldn't reach the server.", true);
   var d = await res.json().catch(function () { return {}; });
-  if (!res.ok) return say(d.error || "Couldn't save that.", true);
-  say(d.provider.label + ": " + d.provider.remaining.toLocaleString() + " left.");
+  if (!res.ok) return creditsSay(d.error || "Couldn't save that (" + res.status + ").", true);
+  creditsSay("Saved. " + d.provider.label + ": " + d.provider.remaining.toLocaleString() + " left.", false);
   ["cRemaining", "cUsed", "cAllowance"].forEach(function (id) { document.getElementById(id).value = ""; });
   load();
 }
 
 async function testAlert() {
-  var res = await fetch("/admin/alerts/test", { method: "POST", headers: { "x-admin-key": key() } });
-  var d = await res.json().catch(function () { return {}; });
-  if (!res.ok) return say("Couldn't send it.", true);
-  if (d.result === "sent") say("Sent. Check your inbox (and spam).");
-  else if (d.result === "logged") say("Email isn't set up on the server (no SMTP_HOST/SMTP_USER/SMTP_PASS), so alerts only go to the Railway log.", true);
-  else say("The mail server refused it. Check the Railway log for why.", true);
+  var button = document.getElementById("cTest");
+  button.disabled = true;
+  creditsSay("Sending... (can take up to 30 seconds)", false);
+  try {
+    var res = await fetch("/admin/alerts/test", { method: "POST", headers: { "x-admin-key": key() } })
+      .catch(function () { return null; });
+    if (!res) return creditsSay("Couldn't reach the server.", true);
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok) return creditsSay("The server refused it (" + res.status + ").", true);
+    if (d.result === "sent") creditsSay("Sent. Check your inbox, and spam.", false);
+    else if (d.result === "logged") creditsSay("Email isn't set up on the server (SMTP_HOST, SMTP_USER, SMTP_PASS), so alerts only go to the Railway log.", true);
+    else creditsSay("Sending failed: " + (d.error || "no reason given"), true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function loadVisits() {

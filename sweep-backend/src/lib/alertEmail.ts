@@ -17,6 +17,11 @@ function mailer() {
     port: Number(SMTP_PORT ?? 587),
     secure: Number(SMTP_PORT ?? 587) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    // Nodemailer's defaults wait two minutes for a server that never answers,
+    // which is what a blocked SMTP port looks like. Fail in seconds instead.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   });
 }
 
@@ -34,12 +39,12 @@ export function isAlertEmailConfigured(): boolean {
 export async function sendAdminAlert(
   subject: string,
   body: string,
-): Promise<"sent" | "logged" | "failed"> {
+): Promise<{ result: "sent" | "logged" | "failed"; error?: string }> {
   const transport = mailer();
   if (!transport) {
     // Without SMTP configured the alert still has to be visible somewhere.
     console.error(`\n[alert] (SMTP not configured)\n${subject}\n${body}\n`);
-    return "logged";
+    return { result: "logged" };
   }
 
   try {
@@ -50,9 +55,11 @@ export async function sendAdminAlert(
       text: body,
     });
     console.log(`[alert] sent: ${subject}`);
-    return "sent";
+    return { result: "sent" };
   } catch (err) {
     console.error("[alert] failed to send:", err);
-    return "failed";
+    // Also logged in full above. This short version is for the dashboard, so
+    // "connection timeout" and "invalid login" don't both read as "failed".
+    return { result: "failed", error: err instanceof Error ? err.message.slice(0, 300) : String(err) };
   }
 }
