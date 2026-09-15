@@ -39,13 +39,30 @@ token against it. This is the most common mix-up.
 | -------------------------------- | ----------------------------------------------------------------------------------------- |
 | Debug (local `expo run:android`) | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`                             |
 | EAS upload key                   | `npx eas-cli credentials` → Android → production → keystore                               |
-| **Play App Signing**             | Play Console → Test and release → Setup → **App integrity** → App signing key certificate |
+| **Play App Signing**             | `79:D7:49:79:42:24:0F:19:04:15:84:FE:D1:E8:F9:2D:C5:D6:67:88` (read off a Play install)   |
 
 **Do not skip the Play App Signing one.** Google re-signs the app before
 delivering it, so the build people download from the store is signed with a key
 you never touched. Without that fingerprint registered, Google sign-in works in
 every build you make and fails with `DEVELOPER_ERROR` for every person who
 installs from Play. It is the single most common way this breaks.
+
+**The App integrity page shows two certificates, and they look alike.** Only
+"App signing key certificate" is what Play installs carry. "Upload key
+certificate" (`A2:8B:7C:…` here) signs what you upload and nobody downloads.
+Registering the upload key is exactly what went wrong the first time: internal
+testing failed with `DEVELOPER_ERROR` until the real one went in, then worked
+instantly.
+
+The certain way to know is to read it off an installed copy. With the phone on
+USB and the Play build installed:
+
+    adb pull "$(adb shell pm path com.sweepshopping.app | head -1 | sed 's/package://' | tr -d '\r')" app.apk
+
+then read the v2 signer certificate's SHA-1. Current `apksigner` builds choke on
+Play's v3.2 post-quantum signer block ("ML-DSA KeyFactory not available") and
+`keytool -printcert -jarfile` prints nothing for a v2-only APK, so parse the
+APK Signing Block directly if those fail.
 
 ## 4. Supabase
 
@@ -92,7 +109,7 @@ This is native code, so JavaScript updates alone will not add it. Either:
 | Symptom                        | Almost always                                                                              |
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
 | No button at all               | Old build without the native module, or no client id in that build                         |
-| `DEVELOPER_ERROR`              | A SHA-1 isn't registered — usually the Play App Signing one                                |
+| `DEVELOPER_ERROR`              | A SHA-1 isn't registered — usually the Play App Signing one, or the upload key registered in its place |
 | "Google didn't return a token" | Wrong web client id, or the web and Android clients are in different Google Cloud projects |
 | Nonce error                    | Step 4, skip nonce checks                                                                  |
 | Only you can sign in           | Consent screen still in Testing                                                            |
