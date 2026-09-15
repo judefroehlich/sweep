@@ -20,7 +20,7 @@ import { storeListPhrase } from "../lib/scrapers/types.js";
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL ?? "support@sweepapp.example";
 const APP_NAME = "Sweep";
 /** Bump when the substance changes, not for typo fixes. */
-const LAST_UPDATED = "13 August 2026";
+const LAST_UPDATED = "14 September 2026";
 
 export async function legalRoutes(app: FastifyInstance) {
   app.get("/privacy", async (_request, reply) => {
@@ -95,6 +95,7 @@ function privacyBody() {
   <h3>If you create an account</h3>
   <ul>
     <li><strong>Email address</strong> — how you sign in, and where price alerts go if you enable email. Handled by Supabase Auth.</li>
+    <li><strong>If you continue with Google</strong> — Google confirms your email address to us. Supabase Auth also keeps the name and profile picture link Google sends with it; the app does not display or use them. We never receive your Google password or access to anything else in your Google account.</li>
     <li><strong>Username</strong> — optional, and <em>public</em>. It appears on the leaderboard and next to deals you find. If you don't set one you appear as an anonymous "Sweeper".</li>
   </ul>
 
@@ -120,7 +121,7 @@ function privacyBody() {
     <li>No payment card details. If you subscribe, Google Play handles payment; we only ever learn that a purchase happened.</li>
     <li>No location, contacts, photos, files, calendar, microphone or camera.</li>
     <li>No browsing history or activity outside the app.</li>
-    <li>We do not sell personal information, and we do not share it with data brokers or advertisers.</li>
+    <li>We do not sell personal information, and nothing you track, search, list or budget is shared with data brokers or advertisers.</li>
   </ul>
 
   <h2>Who else sees data</h2>
@@ -128,10 +129,12 @@ function privacyBody() {
   <ul>
     <li><strong>Supabase</strong> — hosts the database and handles sign-in.</li>
     <li><strong>Expo</strong> — delivers push notifications. Receives the notification token and the alert text.</li>
-    <li><strong>Retailers (${storeListPhrase(6)})</strong> and <strong>Bright Data</strong> — receive the <em>search terms and product links</em> needed to look up a price. They do not receive your identity, email, or anything else about you.</li>
+    <li><strong>Retailers (${storeListPhrase(6)})</strong>, <strong>Bright Data</strong> and <strong>Decodo</strong> — receive the <em>search terms and product links</em> needed to look up a price. They do not receive your identity, email, or anything else about you.</li>
     <li><strong>Sentry</strong> — receives crash reports.</li>
     <li><strong>Resend</strong> — sends email alerts, if you enable them.</li>
-    <li><strong>Google Play</strong> — handles subscriptions and, in future, advertising.</li>
+    <li><strong>Google</strong> — confirms your identity if you choose to continue with Google.</li>
+    <li><strong>Google Play</strong> — handles subscriptions.</li>
+    <li><strong>Google AdMob</strong> — shows a video ad only when you choose to watch one for extra searches. Ads are requested as non-personalized. AdMob receives device information such as the advertising ID and IP address, which Google uses to deliver the ad, measure it and prevent fraud, under <a href="https://policies.google.com/technologies/partner-sites">Google's own policy</a>. Nothing you track, search or budget is sent to it.</li>
   </ul>
 
   <h2>How long we keep it</h2>
