@@ -34,6 +34,30 @@ export interface CheckOutcome {
  * without adding information — a price is a step function, so only the steps
  * are worth recording.
  */
+/**
+ * How long a steady price may go unrecorded.
+ *
+ * Twenty hours, not twenty-four: checks drift, and a strict day would skip
+ * whole days whenever a sweep ran slightly earlier than the one before.
+ */
+export const HISTORY_HEARTBEAT_MS = 20 * 60 * 60 * 1000;
+
+/**
+ * Whether this reading is worth a row.
+ *
+ * Any change is. An unchanged price is worth one a day, which bounds the table
+ * at roughly one row per product per day while still drawing a real line.
+ */
+export function shouldRecordHistory(
+  newPrice: number,
+  latest: { price: number; checkedAt: Date } | null,
+  now = new Date(),
+): boolean {
+  if (!latest) return true;
+  if (latest.price !== newPrice) return true;
+  return now.getTime() - latest.checkedAt.getTime() >= HISTORY_HEARTBEAT_MS;
+}
+
 export async function checkProduct(productId: string): Promise<CheckOutcome> {
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) {
@@ -103,10 +127,24 @@ export async function checkProduct(productId: string): Promise<CheckOutcome> {
       },
     });
 
-    if (newPrice !== null && newPrice !== previousPrice) {
-      await tx.priceHistory.create({
-        data: { productId, price: newPrice },
+    if (newPrice !== null) {
+      // A reading a day even when nothing moved. Recording only changes meant
+      // a steady price left ONE row in the table forever: the detail chart drew
+      // a single dot, the card had no line, and "a price history Sweep keeps
+      // itself" was not true for any product that held its price. A flat line
+      // is information — it is the difference between "it hasn't dropped" and
+      // "we haven't looked".
+      const latest = await tx.priceHistory.findFirst({
+        where: { productId },
+        orderBy: { checkedAt: "desc" },
+        select: { price: true, checkedAt: true },
       });
+
+      if (shouldRecordHistory(newPrice, latest)) {
+        await tx.priceHistory.create({
+          data: { productId, price: newPrice },
+        });
+      }
     }
   });
 

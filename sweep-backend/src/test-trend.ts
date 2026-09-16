@@ -8,6 +8,7 @@
 import "./testEnv.js";
 import { prisma } from "./lib/prisma.js";
 import { recentTrends } from "./routes/products.js";
+import { shouldRecordHistory } from "./lib/priceChecker.js";
 
 let pass = 0, fail = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -94,6 +95,27 @@ try {
   const o = (await recentTrends([old.id], "free")).get(old.id)!;
   check("readings older than the tier's history are left out", o.high === 5000, o.high);
   check("and what's left still draws", o.points.length === 2, o.points.length);
+
+  console.log("\n— what gets written down —");
+  // The reason the cards had nothing to draw: history was only written when
+  // the price moved, so a steady price left one row forever.
+  const now = new Date();
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+  check("a first reading is always kept", shouldRecordHistory(1000, null, now));
+  check("a change is kept", shouldRecordHistory(900, { price: 1000, checkedAt: hoursAgo(1) }, now));
+  check("a rise is kept too", shouldRecordHistory(1100, { price: 1000, checkedAt: hoursAgo(1) }, now));
+  check(
+    "an unchanged price an hour later is not",
+    !shouldRecordHistory(1000, { price: 1000, checkedAt: hoursAgo(1) }, now),
+  );
+  check(
+    "but the same price a day later is",
+    shouldRecordHistory(1000, { price: 1000, checkedAt: hoursAgo(21) }, now),
+  );
+  check(
+    "so a steady product still draws a line",
+    [4, 28, 52].every((h) => shouldRecordHistory(1000, { price: 1000, checkedAt: hoursAgo(h) }, now) === h > 20),
+  );
 
   console.log("\n— nothing to draw —");
   check("no products means no query", (await recentTrends([], "free")).size === 0);
