@@ -21,12 +21,80 @@ import {
   normalizeCheckMinute,
 } from "../lib/schedule.js";
 import {
+  type Tier,
   effectiveTier,
   historyCutoff,
   limitsFor,
   maxCheckMinute,
 } from "../lib/tiers.js";
 import { awardFirstTrack } from "../lib/xp.js";
+
+/** Days of history behind the card sparkline. */
+const TREND_DAYS = 30;
+/** Points per card. A 120px line can't show more, and thinning happens here. */
+const TREND_POINTS = 24;
+
+export interface Trend {
+  points: { checkedAt: string; price: number }[];
+  low: number;
+  high: number;
+  days: number;
+}
+
+/**
+ * Recent history for many products at once.
+ *
+ * One query for the whole list rather than one per card: a list of twenty is
+ * twenty round trips otherwise, on the screen that opens first.
+ *
+ * Thinned evenly to TREND_POINTS. A tracked item checked every 30 minutes for
+ * a month is ~1,400 readings, and sending those to draw a line 120 pixels wide
+ * is most of the response for none of the picture.
+ */
+export async function recentTrends(productIds: string[], tier: Tier): Promise<Map<string, Trend>> {
+  if (productIds.length === 0) return new Map();
+
+  // Never further back than the tier allows, so this can't become a way to
+  // read history the detail screen would hide.
+  const tierCutoff = historyCutoff(tier);
+  const windowStart = new Date(Date.now() - TREND_DAYS * 24 * 60 * 60 * 1000);
+  const since = tierCutoff && tierCutoff > windowStart ? tierCutoff : windowStart;
+
+  const rows = await prisma.priceHistory.findMany({
+    where: { productId: { in: productIds }, checkedAt: { gte: since } },
+    orderBy: { checkedAt: "asc" },
+    select: { productId: true, price: true, checkedAt: true },
+  });
+
+  const byProduct = new Map<string, { checkedAt: string; price: number }[]>();
+  for (const row of rows) {
+    const list = byProduct.get(row.productId) ?? [];
+    list.push({ checkedAt: row.checkedAt.toISOString(), price: row.price });
+    byProduct.set(row.productId, list);
+  }
+
+  const out = new Map<string, Trend>();
+  for (const [productId, points] of byProduct) {
+    // One reading is a dot, not a trend, and drawing it as a flat line would
+    // claim the price held steady for a month.
+    if (points.length < 2) continue;
+    const prices = points.map((p) => p.price);
+    out.set(productId, {
+      points: thin(points, TREND_POINTS),
+      low: Math.min(...prices),
+      high: Math.max(...prices),
+      days: Math.ceil((Date.now() - new Date(points[0].checkedAt).getTime()) / (24 * 60 * 60 * 1000)),
+    });
+  }
+  return out;
+}
+
+/** Evenly spaced sample, always keeping the first and last reading. */
+function thin<T>(points: T[], max: number): T[] {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => points[Math.round(i * step)]);
+}
 
 export async function productRoutes(app: FastifyInstance) {
   // ---- list everything the user tracks ----
@@ -43,6 +111,7 @@ export async function productRoutes(app: FastifyInstance) {
     });
 
     const limits = limitsFor(wallet);
+    const trends = await recentTrends(tracked.map((t) => t.productId), effectiveTier(wallet));
 
     return {
       tracked: tracked.map((t) => ({
@@ -53,6 +122,11 @@ export async function productRoutes(app: FastifyInstance) {
         // What it cost when they started, so the list can show movement since
         // rather than just today's number in isolation.
         priceAtTracking: t.priceAtTracking,
+        // Enough history to draw a line on the card and say where today's
+        // price sits in it. The list is the screen people actually live on,
+        // and until now it answered "what does it cost" without ever
+        // answering "is that good", which is the question tracking is for.
+        trend: trends.get(t.productId) ?? null,
         product: serializeProduct(t.product),
       })),
       limits: {

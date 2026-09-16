@@ -43,6 +43,7 @@ import {
 } from "@/lib/format";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
+import Sparkline from "./Sparkline";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -86,8 +87,21 @@ interface Props {
    * one for a two-up search grid.
    */
   variant?: "row" | "grid";
-  /** Grid only: hands the non-primary actions to a sheet the screen owns. */
+  /** Hands the non-primary actions to a sheet the screen owns. */
   onShowActions?: (actions: CardAction[]) => void;
+  /**
+   * Recent history, drawn as a line under the price with a sentence saying
+   * where today sits in it.
+   *
+   * The whole point of the row card: a price with no context can't answer the
+   * question someone tracking an item actually has.
+   */
+  trend?: {
+    points: { price: number; checkedAt: string }[];
+    low: number;
+    high: number;
+    days: number;
+  } | null;
 }
 
 export default function ProductCard({
@@ -107,6 +121,7 @@ export default function ProductCard({
   actions,
   variant = "row",
   onShowActions,
+  trend,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -124,6 +139,16 @@ export default function ProductCard({
     : formatSellerRating(sellerRating ?? null, sellerRatingCount ?? null);
 
   const visible = (actions ?? []).filter((a): a is CardAction => Boolean(a));
+
+  // Two buttons stay on the card: whichever the screen marked accent, plus the
+  // next one. Screens pass their actions in importance order, so this needs no
+  // second list to keep in step.
+  const primary = visible.filter((a) => a.tone === "accent");
+  const rest = visible.filter((a) => a.tone !== "accent");
+  const toolbarActions = onShowActions ? [...primary, ...rest].slice(0, 2) : visible;
+  const overflow = onShowActions
+    ? [...primary, ...rest].slice(2)
+    : [];
 
   if (variant === "grid") {
     return (
@@ -279,9 +304,27 @@ export default function ProductCard({
               {note}
             </Text>
           )}
+          {/* Needs today's price to say where today sits. A card with no price
+              shows the line alone rather than a sentence about nothing. */}
+          {trend && trend.points.length > 1 && price !== null && (
+            <View style={styles.trend}>
+              <Sparkline points={trend.points} tone={trendTone(trend)} />
+              <Text
+                style={[styles.trendNote, atLow(price, trend) && styles.trendNoteLow]}
+                numberOfLines={1}
+              >
+                {atLow(price, trend)
+                  ? t("card.lowestIn", { days: trend.days })
+                  : t("card.aboveLow", {
+                      amount: formatPrice((price ?? 0) - trend.low),
+                      days: trend.days,
+                    })}
+              </Text>
+            </View>
+          )}
           {lastCheckedAt !== undefined && lastCheckedAt !== null && (
             <Text style={styles.checked}>
-              Checked {formatRelativeTime(lastCheckedAt)}
+              {t("card.checkedAgo", { when: formatRelativeTime(lastCheckedAt) })}
             </Text>
           )}
         </View>
@@ -293,7 +336,7 @@ export default function ProductCard({
 
       {visible.length > 0 && (
         <View style={styles.toolbar}>
-          {visible.map((item) => {
+          {toolbarActions.map((item) => {
             const on = Boolean(item.active);
             return (
               <Pressable
@@ -325,10 +368,43 @@ export default function ProductCard({
               </Pressable>
             );
           })}
+
+          {/* One row of five identical buttons made every action look equally
+              likely, which is how a list of features looks rather than a tool.
+              The rest live one tap away, in the sheet the screen owns. */}
+          {overflow.length > 0 && onShowActions && (
+            <Pressable
+              onPress={() => onShowActions(overflow)}
+              style={({ pressed }) => [styles.tool, pressed && styles.toolPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={t("card.moreActions")}
+            >
+              <Ionicons name="ellipsis-horizontal" size={17} color={colors.textSecondary} />
+              <Text style={styles.toolLabel} numberOfLines={1}>
+                {t("card.more")}
+              </Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
   );
+}
+
+/** Is today's price the lowest reading in the window? */
+function atLow(price: number | null, trend: { low: number }): boolean {
+  return price !== null && price <= trend.low;
+}
+
+/**
+ * What the line means, which is not the same as where it ends. A price that
+ * fell and came back is not good news, so this compares the ends.
+ */
+function trendTone(trend: { points: { price: number }[] }): "good" | "bad" | "flat" {
+  const first = trend.points[0]?.price;
+  const last = trend.points[trend.points.length - 1]?.price;
+  if (first === undefined || last === undefined || first === last) return "flat";
+  return last < first ? "good" : "bad";
 }
 
 const makeStyles = (colors: Palette) =>
@@ -461,8 +537,14 @@ const makeStyles = (colors: Palette) =>
       fontWeight: "700",
     },
     noteBad: { color: colors.warning },
-    noteNeutral: { color: colors.accent, fontWeight: "600" },
+    // Grey, not accent. "Nothing has happened" was painted in the same colour
+    // as a price drop, which made the brand colour mean nothing on a screen
+    // where it should mean "look here".
+    noteNeutral: { color: colors.textSecondary, fontWeight: "600" },
     checked: { color: colors.textTertiary, fontSize: type.caption.fontSize },
+    trend: { marginTop: spacing.xs, gap: 2 },
+    trendNote: { color: colors.textSecondary, fontSize: type.caption.fontSize },
+    trendNoteLow: { color: colors.success, fontWeight: "700" },
 
     toolbar: {
       flexDirection: "row",

@@ -5,6 +5,8 @@
 
 import AddByLink from "@/components/AddByLink";
 import AddToListSheet, { type ListTarget } from "@/components/AddToListSheet";
+import CardActionSheet from "@/components/CardActionSheet";
+import type { CardAction } from "@/components/ProductCard";
 import BudgetEntrySheet, { type EntryDraft } from "@/components/BudgetEntrySheet";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ProductCard from "@/components/ProductCard";
@@ -65,6 +67,9 @@ export default function TrackingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [editing, setEditing] = useState<TrackedProduct | null>(null);
+  // The card keeps two buttons; everything else opens here, the same sheet
+  // search uses.
+  const [sheet, setSheet] = useState<{ subject: string; actions: CardAction[] } | null>(null);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [listTarget, setListTarget] = useState<ListTarget | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -368,29 +373,30 @@ export default function TrackingScreen() {
                 lastCheckedAt={item.product.lastCheckedAt}
                 note={since?.text ?? null}
                 noteTone={since?.tone}
+                trend={item.trend}
                 onPress={() => router.push(`/product/${item.product.id}`)}
+                onShowActions={(actions) =>
+                  setSheet({ subject: item.product.title, actions })
+                }
                 actions={[
-                  {
-                    key: "list",
-                    icon: "list-outline",
-                    label: "List",
-                    onPress: () =>
-                      setListTarget({
-                        retailer: item.product.retailer,
-                        retailerId: item.product.retailerId,
-                        title: item.product.title,
-                        url: item.product.url,
-                      }),
-                  },
-                  // Tracked items have real history, so the sale verdict on the
-                  // lookup page is far stronger here than for a cold search
-                  // result. Always shown: lookups are on every tier now.
+                  // In importance order: the card keeps the first two, the
+                  // rest open in the sheet. Tracked items have real history,
+                  // so the sale verdict is far stronger here than on a cold
+                  // search result, and the alert threshold is the setting
+                  // someone actually comes back to change.
                   {
                     key: "details",
                     icon: "reader-outline",
                     label: t("search.details"),
                     tone: "accent" as const,
                     onPress: () => router.push(`/lookup?productId=${item.product.id}`),
+                  },
+                  {
+                    key: "edit",
+                    icon: "notifications-outline",
+                    label: t("tracking.alertAction"),
+                    busy: removing === item.id,
+                    onPress: () => setEditing(item),
                   },
                   {
                     key: "cart",
@@ -409,17 +415,22 @@ export default function TrackingScreen() {
                     },
                   },
                   {
+                    key: "list",
+                    icon: "list-outline",
+                    label: "List",
+                    onPress: () =>
+                      setListTarget({
+                        retailer: item.product.retailer,
+                        retailerId: item.product.retailerId,
+                        title: item.product.title,
+                        url: item.product.url,
+                      }),
+                  },
+                  {
                     key: "bought",
                     icon: "cart-outline",
                     label: "Bought",
                     onPress: () => openBought(item),
-                  },
-                  {
-                    key: "edit",
-                    icon: "options-outline",
-                    label: "Edit",
-                    busy: removing === item.id,
-                    onPress: () => setEditing(item),
                   },
                 ]}
               />
@@ -435,6 +446,13 @@ export default function TrackingScreen() {
           );
         }}
       />
+      {/* One sheet for the screen rather than one per card. */}
+      <CardActionSheet
+        subject={sheet?.subject ?? null}
+        actions={sheet?.actions ?? []}
+        onClose={() => setSheet(null)}
+      />
+
       <AddToListSheet
         product={listTarget}
         onClose={() => setListTarget(null)}

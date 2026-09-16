@@ -278,6 +278,7 @@ export const en = {
   },
 
   tracking: {
+    alertAction: "Alert",
     filterPlaceholder: "Filter your tracked items",
     sortBy: "Sort by",
     sortDeal: "Best deal",
@@ -739,6 +740,10 @@ export const en = {
     compare: "Compare",
     noPrice: "No price",
     moreActions: "More actions",
+    more: "More",
+    lowestIn: "Lowest in {{days}} days",
+    aboveLow: "{{amount}} above its {{days}}-day low",
+    checkedAgo: "Checked {{when}}",
     hidePassword: "Hide password",
     showPassword: "Show password",
   },
@@ -1048,6 +1053,7 @@ export const es: Translations = {
   },
 
   tracking: {
+    alertAction: "Alerta",
     filterPlaceholder: "Filtra lo que sigues",
     sortBy: "Ordenar por",
     sortDeal: "Mejor oferta",
@@ -1511,6 +1517,10 @@ export const es: Translations = {
     compare: "Comparar",
     noPrice: "Sin precio",
     moreActions: "Más acciones",
+    more: "Más",
+    lowestIn: "Lo más bajo en {{days}} días",
+    aboveLow: "{{amount}} por encima de su mínimo de {{days}} días",
+    checkedAgo: "Revisado {{when}}",
     hidePassword: "Ocultar contraseña",
     showPassword: "Mostrar contraseña",
   },

@@ -55,7 +55,8 @@
     "test:visits": "tsx src/test-visits.ts",
     "db:migrate:dev": "tsx src/migrate-dev.ts",
     "test:reauth": "tsx src/test-reauth.ts",
-    "test:credits": "tsx src/test-credits.ts"
+    "test:credits": "tsx src/test-credits.ts",
+    "test:trend": "tsx src/test-trend.ts"
   },
   "keywords": [],
   "author": "",

@@ -184,6 +184,17 @@ export interface TrackedProduct {
   lastNotifiedAt?: string | null;
   /** Price when this user started watching, in cents. */
   priceAtTracking: number | null;
+  /**
+   * Up to 30 days of readings, thinned for a card-sized line, with the range
+   * over that window. Null when there is only one reading — one point is not
+   * a trend, and drawing it flat would claim the price held.
+   */
+  trend: {
+    points: { price: number; checkedAt: string }[];
+    low: number;
+    high: number;
+    days: number;
+  } | null;
   product: Product;
 }
 
