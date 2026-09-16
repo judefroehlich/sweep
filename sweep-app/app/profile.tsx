@@ -32,14 +32,18 @@ import {
   ApiError,
   type PromoGrant,
   deleteAccount,
+  type AppNotification,
+  type TrackedProduct,
   getMyXp,
+  getNotifications,
+  getTrackedProducts,
   getNotificationStatus,
   getPlans,
   getPromoStatus,
   getQuota,
   getRetailerStatus,
 } from "@/lib/api";
-import { retailerColor } from "@/lib/format";
+import { formatMonthYear, formatPrice, retailerColor } from "@/lib/format";
 import { setGuestMode } from "@/lib/guestMode";
 import {
   deregisterPushNotifications,
@@ -62,6 +66,50 @@ interface RetailerStatus {
    * before the field existed.
    */
   enabled?: boolean;
+}
+
+/**
+ * What Sweep has done for this person, from data the app already fetches.
+ *
+ * Named for what it is: a record, not a scoreboard. Nothing here is a claim
+ * about money saved — we know what a price did, not whether anyone bought at
+ * it, and "you saved $84" would be an invention.
+ */
+interface Record_ {
+  watching: number;
+  /** Price-drop alerts actually sent to this person. */
+  alerts: number;
+  /** Biggest fall, in cents, among the things they watch right now. */
+  biggestDrop: number | null;
+  /** When they started watching the oldest thing they still watch. */
+  since: string | null;
+}
+
+function buildRecord(
+  tracked: TrackedProduct[] | null,
+  feed: AppNotification[] | null,
+): Record_ | null {
+  if (!tracked && !feed) return null;
+
+  const drops = (tracked ?? [])
+    .map((item) =>
+      item.product.price !== null && item.priceAtTracking !== null
+        ? item.priceAtTracking - item.product.price
+        : 0,
+    )
+    .filter((delta) => delta > 0);
+
+  const oldest = (tracked ?? [])
+    .map((item) => item.addedAt)
+    .sort()
+    .at(0);
+
+  return {
+    watching: tracked?.length ?? 0,
+    alerts: (feed ?? []).filter((n) => n.kind === "price-drop").length,
+    biggestDrop: drops.length > 0 ? Math.max(...drops) : null,
+    since: oldest ?? null,
+  };
 }
 
 export default function ProfileScreen() {
@@ -110,6 +158,9 @@ export default function ProfileScreen() {
   // screen can show what someone has without offering to cancel something
   // they never bought.
   const [grant, setGrant] = useState<PromoGrant | null>(null);
+  // Null until the numbers arrive, and left null if they don't — an empty
+  // strip is better than one confidently reporting zeroes it never fetched.
+  const [record, setRecord] = useState<Record_ | null>(null);
 
   const load = useCallback(async () => {
     const [
@@ -120,6 +171,8 @@ export default function ProfileScreen() {
       xpResult,
       plansResult,
       promoResult,
+      trackedResult,
+      feedResult,
     ] = await Promise.all([
       supabase.auth.getSession(),
       getQuota().catch(() => null),
@@ -130,6 +183,11 @@ export default function ProfileScreen() {
       // An older server has no /promo/status. Null means "no grant", which is
       // exactly how this renders anyway.
       getPromoStatus().catch(() => null),
+      // What Sweep has actually done for this person. Both endpoints are ones
+      // the app already calls elsewhere, so this is a strip of real numbers
+      // rather than a reason to build a stats endpoint.
+      getTrackedProducts().catch(() => null),
+      getNotifications().catch(() => null),
     ]);
 
     setEmail(session.session?.user.email ?? null);
@@ -147,6 +205,7 @@ export default function ProfileScreen() {
     setLiveStores(statusResult?.retailers);
     setRetailers(statusResult?.retailers ?? null);
     setPushRegistered(pushResult?.registered ?? null);
+    setRecord(buildRecord(trackedResult?.tracked ?? null, feedResult?.notifications ?? null));
     setUsernameValue(xpResult?.username ?? null);
     setDisplayName(xpResult?.name ?? null);
     setLoading(false);
@@ -266,6 +325,30 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
+        {/* Between who you are and what you pay: what the app has actually
+            done for you. The screen was a settings list, which answers "how do
+            I change something" and never "was any of this worth it".
+            Hidden until there is something to report — three zeroes on a fresh
+            account is a worse first impression than no strip at all. */}
+        {record && !isGuest && (record.watching > 0 || record.alerts > 0) && (
+          <View style={styles.recordRow}>
+            <Stat
+              value={String(record.watching)}
+              label={t(record.watching === 1 ? "profile.recordWatchingOne" : "profile.recordWatching")}
+            />
+            <Stat value={String(record.alerts)} label={t("profile.recordAlerts")} />
+            <Stat
+              value={record.biggestDrop === null ? "—" : formatPrice(record.biggestDrop)}
+              label={t("profile.recordBiggest")}
+            />
+          </View>
+        )}
+        {record?.since && !isGuest && record.watching > 0 && (
+          <Text style={styles.recordSince}>
+            {t("profile.recordSince", { when: formatMonthYear(record.since) })}
+          </Text>
+        )}
+
         <Pressable
           style={({ pressed }) => [styles.card, pressed && styles.pressed]}
           onPress={() => router.push("/plans")}
@@ -326,9 +409,6 @@ export default function ProfileScreen() {
             {tier === null || tier === "free" ? t("profile.comparePlans") : t("profile.seeIncluded")}
           </Text>
         </Pressable>
-
-        {/* Guests have no account to attach a grant to. */}
-        {!isGuest && <RedeemCode onRedeemed={load} />}
 
         <View style={styles.card}>
           <View style={styles.planRow}>
@@ -453,6 +533,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          {/* Moved down from under the plan card. A redeem box is for the few
+              people holding a code, and it was sitting above the alert
+              settings everyone uses. Guests have no account to attach a grant
+              to, so they don't see it at all. */}
+          {!isGuest && <RedeemCode onRedeemed={load} />}
+
           <SectionTitle>{t("profile.help")}</SectionTitle>
           <View style={styles.card}>
             <Pressable
@@ -629,8 +715,36 @@ const THEME_OPTIONS: {
   { mode: "dark", label: "Dark", icon: "moon-outline" },
 ];
 
+function Stat({ value, label }: { value: string; label: string }) {
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const makeStyles = (colors: Palette) =>
   StyleSheet.create({
+    recordRow: { flexDirection: "row", gap: spacing.sm },
+    stat: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      alignItems: "center",
+      gap: 2,
+    },
+    statValue: { color: colors.textPrimary, fontSize: type.title.fontSize, fontWeight: "800" },
+    statLabel: { color: colors.textSecondary, fontSize: type.caption.fontSize, textAlign: "center" },
+    recordSince: { color: colors.textTertiary, fontSize: type.caption.fontSize, textAlign: "center" },
+
     cancelRow: {
       flexDirection: "row",
       alignItems: "center",

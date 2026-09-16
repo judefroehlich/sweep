@@ -117,6 +117,18 @@ export function formatChartDate(value: string | Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/**
+ * "March 2026" — for a date whose day doesn't matter.
+ *
+ * Follows the device's own locale rather than the app's language setting: the
+ * month name is the only word in it, and a phone set to Spanish spells it the
+ * way its owner expects.
+ */
+export function formatMonthYear(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
 /** "3 searches" / "1 search" — avoids a stray plural in the UI. */
 /**
  * Count plus a noun.

@@ -438,6 +438,11 @@ export const en = {
   },
 
   profile: {
+    recordWatching: "watching",
+    recordWatchingOne: "watching",
+    recordAlerts: "price alerts",
+    recordBiggest: "biggest drop",
+    recordSince: "Watching prices since {{when}}.",
     account: "Account",
     plan: "Plan",
     comparePlans: "Compare plans",
@@ -1223,6 +1228,11 @@ export const es: Translations = {
   },
 
   profile: {
+    recordWatching: "vigilando",
+    recordWatchingOne: "vigilando",
+    recordAlerts: "avisos de precio",
+    recordBiggest: "mayor bajada",
+    recordSince: "Vigilando precios desde {{when}}.",
     account: "Cuenta",
     plan: "Plan",
     comparePlans: "Comparar planes",
