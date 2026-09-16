@@ -441,63 +441,11 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
-          <SectionTitle>{t("profile.appearance")}</SectionTitle>
-          <Text style={styles.sectionBlurb}>{t("profile.appearanceHint")}</Text>
-          <View style={styles.themeRow}>
-            {THEME_OPTIONS.map((option) => {
-              const selected = mode === option.mode;
-              return (
-                <Pressable
-                  key={option.mode}
-                  onPress={() => setMode(option.mode)}
-                  style={({ pressed }) => [
-                    styles.themeOption,
-                    selected && styles.themeOptionOn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Ionicons
-                    name={option.icon}
-                    size={19}
-                    color={selected ? colors.accent : colors.textSecondary}
-                  />
-                  <Text style={[styles.themeLabel, selected && styles.themeLabelOn]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionTitle>{t("profile.language")}</SectionTitle>
-          <Text style={styles.sectionBlurb}>{t("profile.languageHint")}</Text>
-          <View style={styles.themeRow}>
-            {LANGUAGES.map((item) => {
-              const selected = language === item.code;
-              return (
-                <Pressable
-                  key={item.code}
-                  onPress={() => setLanguage(item.code)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  style={({ pressed }) => [
-                    styles.themeOption,
-                    selected && styles.themeOptionOn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.themeLabel, selected && styles.themeLabelOn]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
+        {/* Order from here down is by how often it answers a real question:
+            which stores are working (why a search came back short), then the
+            preferences someone sets once, then help, then the account itself.
+            Theme and language used to sit in the middle of the screen with a
+            line of explanation each, pushing everything useful below them. */}
         <View style={styles.section}>
           <SectionTitle>{t("profile.storeStatus")}</SectionTitle>
           <Text style={styles.sectionBlurb}>{t("profile.storeStatusHint")}</Text>
@@ -529,6 +477,61 @@ export default function ProfileScreen() {
             {retailers === null && (
               <Text style={styles.sub}>{t("profile.serverUnreachable")}</Text>
             )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionTitle>{t("profile.appearance")}</SectionTitle>
+          <View style={styles.themeRow}>
+            {THEME_OPTIONS.map((option) => {
+              const selected = mode === option.mode;
+              return (
+                <Pressable
+                  key={option.mode}
+                  onPress={() => setMode(option.mode)}
+                  style={({ pressed }) => [
+                    styles.themeOption,
+                    selected && styles.themeOptionOn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name={option.icon}
+                    size={19}
+                    color={selected ? colors.accent : colors.textSecondary}
+                  />
+                  <Text style={[styles.themeLabel, selected && styles.themeLabelOn]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionTitle>{t("profile.language")}</SectionTitle>
+          <View style={styles.themeRow}>
+            {LANGUAGES.map((item) => {
+              const selected = language === item.code;
+              return (
+                <Pressable
+                  key={item.code}
+                  onPress={() => setLanguage(item.code)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={({ pressed }) => [
+                    styles.themeOption,
+                    selected && styles.themeOptionOn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.themeLabel, selected && styles.themeLabelOn]}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
