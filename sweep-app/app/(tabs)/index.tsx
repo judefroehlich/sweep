@@ -31,8 +31,7 @@ import {
 import {
   RETAILERS,
   formatPrice,
-  percentOff,
-  pluralize,
+  formatRelativeTime,
   retailerColor,
   retailerLabel,
   storeListPhrase,
@@ -124,11 +123,17 @@ export default function HomeScreen() {
 
   if (loading) return <Loading />;
 
-  // The single most useful fact on this screen: the best deal you're currently
-  // sitting on. If nothing's tracked, that space becomes the call to action.
-  const best = [...tracked]
-    .map((t) => ({ item: t, off: percentOff(t.product.price, t.product.listPrice) ?? 0 }))
-    .sort((a, b) => b.off - a.off)[0];
+  // What actually happened to the things this person watches. Home used to
+  // show one card — the steepest discount off list — which is a fact about the
+  // retailer's own sticker, not about anything that changed. Someone opening
+  // the app wants to know what moved since they last looked, and if nothing
+  // did, to be told that plainly instead of left to guess.
+  const moved = movedItems(tracked);
+  const lastChecked = tracked
+    .map((t) => t.product.lastCheckedAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1);
 
   return (
     <Screen>
@@ -138,11 +143,15 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        {/* ---- who we are ---- */}
-        <View style={styles.brand}>
-          <Text style={styles.brandName}>Sweep</Text>
-          <Text style={styles.brandTagline}>{t("home.tagline")}</Text>
-        </View>
+        {/* Shown to someone with nothing tracked yet, who still needs telling
+            what this is. A returning user gets the space back for their own
+            prices — they know what app they opened. */}
+        {tracked.length === 0 && (
+          <View style={styles.brand}>
+            <Text style={styles.brandName}>Sweep</Text>
+            <Text style={styles.brandTagline}>{t("home.tagline")}</Text>
+          </View>
+        )}
 
         {/* ---- the pitch: one search, every store ---- */}
         <Pressable
@@ -176,40 +185,76 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        {/* ---- what you're watching, kept secondary ---- */}
-        {best && best.item.product.price !== null ? (
-          <Pressable
-            style={({ pressed }) => [styles.watchCard, pressed && styles.pressed]}
-            onPress={() => router.push(`/product/${best.item.product.id}`)}
-          >
-            <View style={styles.watchLeft}>
-              <Text style={styles.watchLabel}>
-                {best.off >= 20 ? t("home.biggestDrop") : t("home.watching")}
-              </Text>
-              <Text style={styles.watchTitle} numberOfLines={1}>
-                {best.item.product.title}
-              </Text>
-              <View style={styles.watchPriceRow}>
-                <Text style={styles.watchPrice}>
-                  {formatPrice(best.item.product.price)}
-                </Text>
-                {best.off > 0 && (
-                  <Text style={styles.watchOff}>{best.off}% off</Text>
-                )}
-                <Text style={styles.watchRetailer}>
-                  {retailerLabel(best.item.product.retailer)}
-                </Text>
-              </View>
+        {/* ---- what changed while you were away ---- */}
+        {tracked.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.changedHead}>
+              <SectionTitle>{t("home.changed")}</SectionTitle>
+              {tracked.length > moved.length && moved.length > 0 && (
+                <Pressable onPress={() => router.push("/tracking")} hitSlop={8}>
+                  <Text style={styles.seeAll}>
+                    {t("home.seeAll", { count: tracked.length })}
+                  </Text>
+                </Pressable>
+              )}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-          </Pressable>
+
+            {moved.length > 0 ? (
+              moved.map((m) => (
+                <Pressable
+                  key={m.item.id}
+                  style={({ pressed }) => [styles.movedRow, pressed && styles.pressed]}
+                  onPress={() => router.push(`/product/${m.item.product.id}`)}
+                >
+                  <Ionicons
+                    name={m.down ? "trending-down" : "trending-up"}
+                    size={18}
+                    color={m.down ? colors.success : colors.warning}
+                  />
+                  <View style={styles.movedText}>
+                    <Text style={styles.movedTitle} numberOfLines={1}>
+                      {m.item.product.title}
+                    </Text>
+                    <Text style={styles.movedMeta}>
+                      {formatPrice(m.item.product.price)} ·{" "}
+                      {retailerLabel(m.item.product.retailer)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.movedDelta, m.down ? styles.movedDown : styles.movedUp]}>
+                    {t(m.down ? "home.changedDown" : "home.changedUp", {
+                      amount: formatPrice(m.amount),
+                    })}
+                  </Text>
+                </Pressable>
+              ))
+            ) : (
+              // Said out loud rather than left as an empty space. "Nothing
+              // moved" is a real answer, and the check time is what makes it
+              // believable.
+              <View style={styles.quietCard}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} />
+                <View style={styles.movedText}>
+                  <Text style={styles.quietTitle}>{t("home.nothingMoved")}</Text>
+                  <Text style={styles.quietBody}>
+                    {t(tracked.length === 1 ? "home.nothingMovedOne" : "home.nothingMovedBody", {
+                      count: tracked.length,
+                      when: lastChecked ? formatRelativeTime(lastChecked) : "—",
+                    })}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
         ) : (
           <Pressable
             style={({ pressed }) => [styles.watchEmpty, pressed && styles.pressed]}
             onPress={() => router.push("/tracking")}
           >
             <Ionicons name="pricetag-outline" size={18} color={colors.textSecondary} />
-            <Text style={styles.watchEmptyText}>{t("home.watchEmpty")}</Text>
+            <View style={styles.movedText}>
+              <Text style={styles.quietTitle}>{t("home.trackSomething")}</Text>
+              <Text style={styles.quietBody}>{t("home.trackSomethingBody")}</Text>
+            </View>
             <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
           </Pressable>
         )}
@@ -246,6 +291,12 @@ export default function HomeScreen() {
             quiet, but always present: a store dropping out looks like our
             bug from the outside, and someone who thinks the app is broken
             stops trusting the prices that are fine. */}
+        {/* Only when something is actually wrong. This used to sit here
+            permanently, which put a support link in the middle of the home
+            screen for the 99% of days when every store works — and a standing
+            "is a retailer broken?" prompt plants the idea that one is. The
+            full list lives in Profile, where someone who wants it will look. */}
+        {downStores.length > 0 && (
         <Pressable
           onPress={() => setStoreHelpOpen(true)}
           hitSlop={8}
@@ -275,6 +326,7 @@ export default function HomeScreen() {
                 : t("storeTrouble.buttonDownMany", { count: downStores.length })}
           </Text>
         </Pressable>
+        )}
 
         <View style={styles.section}>
           <SectionTitle>{t("home.shortcuts")}</SectionTitle>
@@ -312,12 +364,6 @@ export default function HomeScreen() {
               label={t("home.budget")}
               hint={t("home.budgetHint")}
               onPress={() => router.push("/budget")}
-            />
-            <Shortcut
-              icon="person-circle-outline"
-              label={t("home.profile")}
-              hint={t("home.profileHint")}
-              onPress={() => router.push("/profile")}
             />
             <Shortcut
               icon="trophy-outline"
@@ -381,6 +427,32 @@ export default function HomeScreen() {
       </ScrollView>
     </Screen>
   );
+}
+
+/**
+ * Tracked items whose price has actually moved, steepest first.
+ *
+ * Movement is measured against what this person first saw, not against the
+ * retailer's list price: "73% off list" is the shop's own claim and is often
+ * permanent, while "$4 cheaper than when you started watching" is a fact about
+ * the thing they asked us to watch.
+ *
+ * Sub-1% wobble is left out. A 12 cent drift on a $40 item is not news, and a
+ * list of non-events trains people to ignore the screen.
+ */
+function movedItems(tracked: TrackedProduct[]) {
+  return tracked
+    .map((item) => {
+      const now = item.product.price;
+      const then = item.priceAtTracking;
+      if (now === null || then === null || then <= 0) return null;
+      const amount = Math.abs(then - now);
+      if (amount / then < 0.01) return null;
+      return { item, amount, down: now < then };
+    })
+    .filter((m): m is { item: TrackedProduct; amount: number; down: boolean } => m !== null)
+    .sort((a, b) => b.amount / b.item.priceAtTracking! - a.amount / a.item.priceAtTracking!)
+    .slice(0, 3);
 }
 
 function ActionCard({
@@ -456,6 +528,40 @@ function Shortcut({
 
 const makeStyles = (colors: Palette) =>
   StyleSheet.create({
+    changedHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    seeAll: { color: colors.accent, fontSize: type.caption.fontSize, fontWeight: "700" },
+
+    movedRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    movedText: { flex: 1, gap: 2 },
+    movedTitle: { color: colors.textPrimary, fontSize: type.body.fontSize, fontWeight: "700" },
+    movedMeta: { color: colors.textSecondary, fontSize: type.caption.fontSize },
+    movedDelta: { fontSize: type.body.fontSize, fontWeight: "800" },
+    movedDown: { color: colors.success },
+    movedUp: { color: colors.warning },
+
+    quietCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: spacing.md,
+    },
+    quietTitle: { color: colors.textPrimary, fontSize: type.body.fontSize, fontWeight: "700" },
+    quietBody: { color: colors.textSecondary, fontSize: type.caption.fontSize },
+
     content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing.xxl },
     pressed: { opacity: 0.75 },
 

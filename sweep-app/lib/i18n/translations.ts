@@ -183,6 +183,18 @@ export const en = {
     tagline: "Your online shopping buddy",
     heroTitle: "What are you shopping for?",
     leaderboardHint: "XP & ranks",
+    // The section that replaced the single "biggest drop" card. Home's job is
+    // to say what happened while you weren't looking.
+    changed: "What's changed",
+    changedDown: "Down {{amount}}",
+    changedUp: "Up {{amount}}",
+    changedLowest: "Lowest in {{days}} days",
+    nothingMoved: "Nothing moved",
+    nothingMovedBody: "{{count}} items watched, last checked {{when}}.",
+    nothingMovedOne: "1 item watched, last checked {{when}}.",
+    seeAll: "See all {{count}}",
+    trackSomething: "Track a price",
+    trackSomethingBody: "Paste a product link and Sweep watches it for you.",
   },
 
   search: {
@@ -956,6 +968,16 @@ export const es: Translations = {
     tagline: "Tu compañero de compras online",
     heroTitle: "¿Qué estás buscando?",
     leaderboardHint: "XP y rangos",
+    changed: "Qué ha cambiado",
+    changedDown: "Bajó {{amount}}",
+    changedUp: "Subió {{amount}}",
+    changedLowest: "Lo más bajo en {{days}} días",
+    nothingMoved: "Nada se movió",
+    nothingMovedBody: "{{count}} artículos vigilados, revisados {{when}}.",
+    nothingMovedOne: "1 artículo vigilado, revisado {{when}}.",
+    seeAll: "Ver los {{count}}",
+    trackSomething: "Sigue un precio",
+    trackSomethingBody: "Pega el enlace de un producto y Sweep vigila su precio."
   },
 
   search: {
